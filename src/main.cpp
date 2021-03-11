@@ -159,7 +159,7 @@ static inline bool enable_plugin(char* optarg, bool* plugin_list, bool* disabled
                 plugni_list[i] = 2;
             else
                 plugin_list[i] = 1;
-                
+
             return true;
         }
     }
@@ -321,7 +321,7 @@ int main(int argc, char** argv)
     uint32_t injection_thread = 0;
     struct sigaction act;
     output_format_t output = OUTPUT_DEFAULT;
-    unsigned char plugin_list[] = {[0 ... __DRAKVUF_PLUGIN_LIST_MAX-1] = 1};
+    unsigned char plugin_list[] = {[0 ... __DRAKVUF_PLUGIN_LIST_MAX-1] = 2};
     int wait_stop_plugins = 0;
     bool verbose = false;
     bool leave_paused = false;
