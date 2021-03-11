@@ -146,12 +146,24 @@ static void cleanup_timer(drakvuf_c* drakvuf, GThread* timeout_thread)
     }
 }
 
-int drakvuf_c::start_plugins(const bool* plugin_list, const plugins_options* options)
+int drakvuf_c::start_plugins(const bool* plugin_list, const plugins_options* options, bool injection_finished)
 {
     for (int i = 0; i < __DRAKVUF_PLUGIN_LIST_MAX; i++)
     {
-        if (plugin_list[i])
+        if (plugin_list[i] == 1)
         {
+            if (injection_finished)
+                continue;
+
+            int rc = plugins->start(static_cast<drakvuf_plugin_t>(i), options);
+            if (rc < 0)
+                return rc;
+        }
+        else if (plugin_list[i] == 2)
+        {
+            if (!injection_finished)
+                continue;
+
             int rc = plugins->start(static_cast<drakvuf_plugin_t>(i), options);
             if (rc < 0)
                 return rc;
