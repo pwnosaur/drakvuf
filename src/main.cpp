@@ -144,9 +144,9 @@ static inline void disable_all_plugins(bool* plugin_list)
         plugin_list[i] = false;
 }
 
-static inline bool enable_plugin(char* optarg, bool* plugin_list, bool* disabled_all)
+static inline bool enable_plugin(char* optarg, bool* plugin_list, bool* disabled_all, bool disable_all = true)
 {
-    if (!*disabled_all)
+    if (!*disabled_all && disable_all)
     {
         disable_all_plugins(plugin_list);
         *disabled_all = true;
@@ -317,7 +317,8 @@ int main(int argc, char** argv)
     uint32_t injection_thread = 0;
     struct sigaction act;
     output_format_t output = OUTPUT_DEFAULT;
-    bool plugin_list[] = {[0 ... __DRAKVUF_PLUGIN_LIST_MAX-1] = 1};
+    bool before_injection_plugin_list = {[0 ... __DRAKVUF_PLUGIN_LIST_MAX-1] = 0};
+    bool after_injection_plugins[] = {[0 ... __DRAKVUF_PLUGIN_LIST_MAX-1] = 1};
     int wait_stop_plugins = 0;
     bool verbose = false;
     bool leave_paused = false;
@@ -511,7 +512,7 @@ int main(int argc, char** argv)
                     output = OUTPUT_JSON;
                 break;
             case 'x':
-                if (!disable_plugin(optarg, plugin_list))
+                if (!disable_plugin(optarg, after_injection_plugins))
                 {
                     fprintf(stderr, "Unknown plugin: %s\n", optarg);
                     return drakvuf_exit_code_t::FAIL;
@@ -521,7 +522,14 @@ int main(int argc, char** argv)
                 wait_stop_plugins = atoi(optarg);
                 break;
             case 'a':
-                if (!enable_plugin(optarg, plugin_list, &disabled_all))
+                if (!enable_plugin(optarg, after_injection_plugins, &disabled_all))
+                {
+                    fprintf(stderr, "Unknown plugin: %s\n", optarg);
+                    return drakvuf_exit_code_t::FAIL;
+                }
+                break;
+            case 'z':
+                if (!enable_plugin(optarg, before_injection_plugins, NULL, false))
                 {
                     fprintf(stderr, "Unknown plugin: %s\n", optarg);
                     return drakvuf_exit_code_t::FAIL;
@@ -727,6 +735,12 @@ int main(int argc, char** argv)
     sigaction(SIGINT, &act, nullptr);
     sigaction(SIGALRM, &act, nullptr);
 
+
+    PRINT_DEBUG("Starting plugins before injection\n");
+
+    if (drakvuf->start_plugins(before_injection_plugins, &options) < 0)
+        return drakvuf_exit_code_t::FAIL;
+
     vmi_pid_t injected_pid = 0;
     if (injection_pid > 0 && inject_file)
     {
@@ -745,9 +759,9 @@ int main(int argc, char** argv)
         }
     }
 
-    PRINT_DEBUG("Starting plugins\n");
+    PRINT_DEBUG("Starting plugins after injection\n");
 
-    if (drakvuf->start_plugins(plugin_list, &options) < 0)
+    if (drakvuf->start_plugins(after_injection_plugins, &options) < 0)
         return drakvuf_exit_code_t::FAIL;
 
     PRINT_DEBUG("Beginning DRAKVUF main loop\n");
@@ -768,10 +782,17 @@ int main(int argc, char** argv)
     PRINT_DEBUG("Beginning stop plugins\n");
 
     bool plugins_pending = false;
-    int rc = drakvuf->stop_plugins(plugin_list);
-    if (rc < 0)
+
+    int rcb = drakvuf->stop_plugins(before_injection_plugins);
+    if (rcb < 0)
         return drakvuf_exit_code_t::FAIL;
-    else if (rc > 0)
+    else if (rcb > 0)
+        plugins_pending = true;
+
+    int rca = drakvuf->stop_plugins(after_injection_plugins);
+    if (rca < 0)
+        return drakvuf_exit_code_t::FAIL;
+    else if (rca > 0)
         plugins_pending = true;
 
     PRINT_DEBUG("Finished stop plugins\n");
@@ -780,7 +801,7 @@ int main(int argc, char** argv)
     {
         PRINT_DEBUG("Beginning wait stop plugins\n");
 
-        drakvuf->plugin_stop_loop(wait_stop_plugins, plugin_list);
+        drakvuf->plugin_stop_loop(wait_stop_plugins, after_injection_plugins);
 
         PRINT_DEBUG("Finished wait stop plugins\n");
     }
