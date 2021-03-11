@@ -130,7 +130,7 @@ static inline bool disable_plugin(char* optarg, bool* plugin_list)
     {
         if (!strcmp(optarg, drakvuf_plugin_names[i]))
         {
-            plugin_list[i] = false;
+            plugin_list[i] = 0;
             return true;
         }
     }
